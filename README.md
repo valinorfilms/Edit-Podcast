@@ -16,7 +16,8 @@ O GitHub compila o app sozinho a cada envio para o branch `main`, usando o arqui
 3. Para atualizar depois, é só baixar o APK novo e instalar por cima. Os dados e ajustes continuam.
 
 ## Diferenças em relação à versão web
-- **Salvar e enviar XML:** grava o arquivo em `Documentos/CP Multicam/` e abre o menu de compartilhar do Android (Drive, WhatsApp, e-mail…).
+- **Salvar no aparelho:** abre o "Salvar como" do Android para escolher a pasta (Downloads, Documentos, SSD/pendrive, Drive…) e o nome do XML.
+- **Enviar para…:** abre o menu de compartilhar (WhatsApp, Quick Share, Drive, e-mail…).
 - Abre em tela cheia, com ícone próprio, e não depende do link do Claude.
 
 ## Mudar o app

@@ -103,7 +103,7 @@ details{margin-top:10px;border-top:1px solid var(--line);padding-top:6px}summary
    <div class="bar" id="share"></div>
    <div id="shareTxt"></div>
    <div class="note">Referência do CP: convidado 50–55%, aberto e host 22–25% cada, mediana 13–15 s.</div>
-   <div class="ctrl"><button class="pri" id="xml">Baixar XML p/ Premiere</button><button id="copy">Copiar XML</button></div>
+   <div class="ctrl"><button class="pri" id="xml">Baixar XML p/ Premiere</button><button id="share" hidden>Enviar para…</button><button id="copy">Copiar XML</button></div>
    <textarea id="out" hidden readonly></textarea>
   </div>
  </div>
@@ -563,23 +563,26 @@ function xml(){
     return`<track><clipitem id="a${j+1}"><name>${esc(t.name)}</name><enabled>TRUE</enabled><duration>${fd}</duration>${rate}<start>${st}</start><end>${seqDur}</end><in>${inF}</in><out>${inF+seqDur-st}</out>${fileTag('aud'+j,t.name,`${base}/02_bruto/02_audios/${t.name}`,fd,false,t.ch)}<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack>${t.gain?level(t.gain):''}</clipitem></track>`}).join('');
   return`<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="seq1"><name>05_Edicao_v1</name><duration>${seqDur}</duration>${rate}<media><video><format><samplecharacteristics>${rate}<width>3840</width><height>2160</height><pixelaspectratio>square</pixelaspectratio></samplecharacteristics></format>${[1,2,3].map(c=>`<track>${vtr[c]}</track>`).join('')}</video><audio>${atr}</audio></media></sequence></xmeml>`;
 }
-// No app Android: salva o XML com o plugin Filesystem e abre o menu de compartilhar (Drive, WhatsApp, e-mail...)
-const Cap=window.Capacitor, plug=n=>Cap&&(Cap.Plugins&&Cap.Plugins[n]||(Cap.registerPlugin&&Cap.registerPlugin(n)));
-const FS=plug('Filesystem'), SH=plug('Share');
+// No app Android: "Salvar no aparelho" abre o Salvar como do Android; "Enviar para…" abre o compartilhar
+const Cap=window.Capacitor, native=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
+const plug=n=>Cap&&(Cap.Plugins&&Cap.Plugins[n]||(Cap.registerPlugin&&Cap.registerPlugin(n)));
+const SAVE=native&&plug('SaveFile'), FS=native&&plug('Filesystem'), SH=native&&plug('Share');
+const xmlName=()=>'05_Edicao_v1_'+new Date().toISOString().slice(0,16).replace(/[-:T]/g,'')+'.xml';
 let dl=null;
-if(!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform())){try{window.claude&&window.claude.use('downloads').then(d=>{dl=d;if(!d)$('xml').hidden=true}).catch(()=>{$('xml').hidden=true})}catch(e){$('xml').hidden=true}}
-else $('xml').textContent='Salvar e enviar XML';
+if(native){$('xml').textContent='Salvar no aparelho';$('share').hidden=false}
+else{$('share').hidden=true;try{window.claude&&window.claude.use('downloads').then(d=>{dl=d;if(!d)$('xml').hidden=true}).catch(()=>{$('xml').hidden=true})}catch(e){$('xml').hidden=true}}
 $('xml').onclick=async()=>{if(demo)return msg('Carregue os áudios do episódio antes de exportar.');
-  const name='05_Edicao_v1_'+new Date().toISOString().slice(0,16).replace(/[-:T]/g,'')+'.xml',data=xml();
-  if(FS){
-    let r=null;
-    try{r=await FS.writeFile({path:'CP Multicam/'+name,data,directory:'DOCUMENTS',encoding:'utf8',recursive:true});msg('XML salvo em Documentos/CP Multicam/'+name)}
-    catch(e){r=await FS.writeFile({path:name,data,directory:'CACHE',encoding:'utf8'})}
-    try{await SH.share({title:name,text:'XML da edição multicâmera',url:r.uri,dialogTitle:'Enviar XML para…'})}catch(e){}
+  const name=xmlName(),data=xml();
+  if(native){
+    try{await SAVE.save({filename:name,data,mimeType:'text/xml'});msg('XML salvo: '+name+'. No Premiere: Arquivo > Importar.')}
+    catch(e){const m=String(e&&e.message||e);msg(/cancel/i.test(m)?'Salvamento cancelado.':'Erro ao salvar: '+m)}
     return;
   }
   if(!dl)return msg('Download indisponível aqui. Use "Copiar XML".');
   try{await dl.save({filename:'05_Edicao_v1.xml',data});msg('XML salvo. No Premiere: Arquivo > Importar.')}catch(e){msg('Download cancelado. Use "Copiar XML".')}};
+$('share').onclick=async()=>{if(demo)return msg('Carregue os áudios do episódio antes de exportar.');
+  try{const name=xmlName(),r=await FS.writeFile({path:name,data:xml(),directory:'CACHE',encoding:'utf8'});
+    await SH.share({title:name,url:r.uri,dialogTitle:'Enviar XML para…'})}catch(e){if(!/cancel/i.test(String(e&&e.message||e)))msg('Erro ao enviar: '+(e.message||e))}};
 $('copy').onclick=async()=>{if(demo)return msg('Carregue os áudios do episódio antes de exportar.');const x=xml(),o=$('out');o.hidden=false;o.value=x;
   try{await navigator.clipboard.writeText(x);msg('XML copiado. Cole num arquivo .xml e importe no Premiere.')}catch(e){o.select();msg('Selecione o texto acima e copie.')}};
 

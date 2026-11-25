@@ -1,0 +1,6 @@
+{
+  "appId": "br.com.action.cpmulticam",
+  "appName": "CP Multicâmera",
+  "webDir": "www",
+  "android": { "allowMixedContent": false }
+}

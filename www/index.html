@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121417">
+<title>Corte Multicâmera CP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: ferramenta de estúdio, direta, sem enfeite
+   IDEA: mesa de corte de vídeo (switcher) com tally vermelho
+   PICTURE: monitor de programa + linha do tempo com faixas de câmera e níveis dos microfones
+   COLOUR and TYPE: painel grafite, Cam01 cinza, Cam02 azul, Cam03 laranja, tally vermelho; Inter Tight + Inter
+   LAYOUT: monitor e botões de câmera no topo, linha do tempo larga, configuração embaixo */
+:root{color-scheme:light dark;
+ --bg:light-dark(#d5dbe0,#121417);--panel:light-dark(#fff,#1b1f24);--ink:light-dark(#111,#e9edf1);--mut:light-dark(#5b6670,#8b96a1);
+ --line:light-dark(#c3cbd2,#2c333a);--c1:#8a96a3;--c2:#3d8bfd;--c3:#f29f3a;--tally:#e8251a}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2{font-family:"Inter Tight",Inter,sans-serif;margin:0;line-height:1.1}
+h1{font-size:clamp(22px,3vw,32px)}h2{font-size:18px;margin-bottom:10px}
+.wrap{max-width:1240px;margin:0 auto;padding:calc(16px + env(safe-area-inset-top)) max(3vw,12px,env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(3vw,12px,env(safe-area-inset-left))}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.note{font-size:13px;color:var(--mut)}
+.deck{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.mon{position:relative;aspect-ratio:16/9;background:#000;border-radius:8px;overflow:hidden;outline:4px solid var(--tally)}
+.mon video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none}
+.mon video.on{display:block}
+.slate{position:absolute;inset:0;display:grid;place-items:center;font:700 clamp(40px,8vw,88px) "Inter Tight",sans-serif;color:#fff}
+.tc{position:absolute;left:10px;bottom:8px;color:#fff;font:600 15px Inter;background:#0009;padding:2px 8px;border-radius:4px;font-variant-numeric:tabular-nums}
+.cams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.cam{min-height:64px;border-radius:8px;border:2px solid transparent;font:700 18px "Inter Tight",Inter,sans-serif;color:#fff;cursor:pointer}
+.cam small{display:block;font:500 12px Inter;opacity:.85}
+.cam.live{border-color:var(--tally);box-shadow:0 0 0 3px var(--tally)}
+.k1{background:var(--c1)}.k2{background:var(--c2)}.k3{background:var(--c3)}
+.ctrl{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+button,.btn{min-height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 15px Inter;cursor:pointer}
+button.pri{background:var(--tally);border-color:var(--tally);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--c2);outline-offset:2px}
+button:disabled{opacity:.5}
+.stats{display:grid;gap:10px}
+.bar{height:26px;border-radius:6px;background:var(--line);overflow:hidden;display:flex}
+.bar span{display:block;height:100%}
+.row{display:flex;justify-content:space-between;font-size:14px}
+.big{font:700 34px "Inter Tight",Inter,sans-serif;font-variant-numeric:tabular-nums}
+.tl{margin-top:12px}
+.scroll{overflow-x:auto;border-radius:8px;background:var(--bg)}
+canvas{display:block;touch-action:pan-x}
+.zoom{display:flex;gap:6px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 3px}
+input,select{width:100%;min-height:44px;font-size:16px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.pick{display:flex;flex-direction:column;justify-content:center;min-height:56px;margin:8px 0;padding:8px 14px;border:2px dashed var(--line);border-radius:8px;font:600 15px Inter,sans-serif;color:var(--ink);cursor:pointer}.pick input{position:absolute;width:1px;height:1px;opacity:0}.pick .fn{font:400 13px Inter,sans-serif;color:var(--mut)}.pick:active{border-color:var(--tally)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.trk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 8px;align-items:center;font-size:14px;padding:8px 0;border-bottom:1px solid var(--line)}
+.trk .tn{font-weight:600;overflow-wrap:anywhere}.trk .gn{grid-column:1/-1;display:grid;grid-template-columns:auto minmax(0,1fr) 64px;gap:8px;align-items:center}
+.trk .gn span{font-size:13px;color:var(--mut)}.trk output{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.trk input[type=range]{min-height:44px;padding:0;accent-color:var(--tally)}.trk .of{grid-column:1/-1;display:grid;grid-template-columns:auto 120px;gap:8px;align-items:center;font-size:13px;color:var(--mut)}
+#prog{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:8px}#prog i{display:block;height:100%;width:0;background:var(--tally)}
+#msg{font-size:14px;margin-top:8px;min-height:1.4em}
+textarea{width:100%;height:90px;font:12px monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px}
+.pace{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.pace button{min-height:64px;padding:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.pace b{font:700 17px "Inter Tight",Inter,sans-serif}.pace small{font:400 12px Inter,sans-serif;color:var(--mut)}
+.pace button.sel{background:var(--tally);border-color:var(--tally);color:#fff}.pace button.sel small{color:#fff}
+details{margin-top:10px;border-top:1px solid var(--line);padding-top:6px}summary{min-height:44px;display:flex;align-items:center;font-weight:600;cursor:pointer}
+.layers{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.ly{min-height:40px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:14px}.ly i{width:10px;height:10px;border-radius:50%}
+.ly.off{opacity:.5;text-decoration:line-through}
+.trk .del{min-height:40px;padding:0 12px;font-size:14px;color:var(--tally);border-color:var(--tally)}
+.trk .sel2{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}.trk .sel2 label{margin:0}
+@media(max-width:760px){.deck{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <div class="top"><h1>Corte multicâmera · Capital Político</h1><span class="note" id="demoNote">Dados de exemplo — carregue os WAVs do episódio para começar.</span></div>
+
+ <div class="deck">
+  <div class="card">
+   <div class="mon" id="mon">
+    <video id="v1" playsinline muted preload="auto"></video><video id="v2" playsinline muted preload="auto"></video><video id="v3" playsinline muted preload="auto"></video>
+    <div class="slate" id="slate">CAM 2</div><div class="tc" id="tc">00:00:00</div>
+   </div>
+   <div class="cams">
+    <button class="cam k1" data-c="1">CAM 1<small>Aberto</small></button>
+    <button class="cam k2" data-c="2">CAM 2<small>Host</small></button>
+    <button class="cam k3" data-c="3">CAM 3<small>Convidado</small></button>
+   </div>
+   <div class="ctrl">
+    <button class="pri" id="play">▶ Tocar</button>
+    <button id="back">−5 s</button><button id="fwd">+5 s</button>
+    <button id="undo">Desfazer</button>
+   </div>
+  </div>
+  <div class="card stats">
+   <h2>Resultado do corte</h2>
+   <div><div class="big" id="nShots">0</div><div class="note">planos · mediana <b id="med">0</b> s</div></div>
+   <div class="bar" id="share"></div>
+   <div id="shareTxt"></div>
+   <div class="note">Referência do CP: convidado 50–55%, aberto e host 22–25% cada, mediana 13–15 s.</div>
+   <div class="ctrl"><button class="pri" id="xml">Baixar XML p/ Premiere</button><button id="copy">Copiar XML</button></div>
+   <textarea id="out" hidden readonly></textarea>
+  </div>
+ </div>
+
+ <div class="card tl">
+  <div class="top" style="margin:0 0 8px"><h2 style="margin:0">Linha do tempo</h2>
+   <div class="zoom"><span class="note">Zoom</span><button data-z="1">1×</button><button data-z="4">4×</button><button data-z="16">16×</button></div></div>
+  <div class="layers" id="layers" aria-label="Camadas de áudio"></div>
+  <div class="scroll" id="sc"><canvas id="cv"></canvas></div>
+  <div class="note" style="margin-top:6px">Toque na linha do tempo para ir até o ponto. Com o vídeo parado ou tocando, toque numa câmera para cortar ali.</div>
+ </div>
+
+ <div class="grid">
+  <div class="card">
+   <h2>1 · Áudios dos microfones</h2>
+   <label class="pick">Adicionar áudios<span class="fn">WAV, M4A, MP3, AAC, FLAC, OGG · um arquivo por microfone</span><input type="file" id="wavIn" multiple></label>
+   <div id="trks"></div><div class="ctrl"><button id="norm">Igualar volumes</button><button id="zero">Zerar ganhos</button></div>
+   <div id="prog"><i></i></div><div id="msg"></div>
+  </div>
+  <div class="card">
+   <h2>2 · Vídeos e sincronização</h2>
+   <label class="pick">Cam01 · aberto<span class="fn" id="fn1">nenhum vídeo</span><input type="file" data-cam="1" class="vin"></label>
+   <label class="pick">Cam02 · host<span class="fn" id="fn2">nenhum vídeo</span><input type="file" data-cam="2" class="vin"></label>
+   <label class="pick">Cam03 · convidado<span class="fn" id="fn3">nenhum vídeo</span><input type="file" data-cam="3" class="vin"></label>
+   <button class="pri" id="sync" style="width:100%;margin-top:6px">Sincronizar automaticamente</button>
+   <div id="syncRes" class="note" style="margin-top:6px">Carregue os áudios e os vídeos. O app compara as formas de onda e acerta os atrasos sozinho.</div>
+   <label>Atraso de cada câmera em relação aos áudios (s)</label>
+   <div class="two" style="grid-template-columns:repeat(3,1fr)"><input id="o1" type="number" step="0.01" value="0"><input id="o2" type="number" step="0.01" value="0"><input id="o3" type="number" step="0.01" value="0"></div>
+   <div class="note">A sincronização lê só o áudio dos vídeos, então funciona com os arquivos 4K. Para assistir no tablet, cópias em 720p rodam melhor.</div>
+  </div>
+  <div class="card">
+   <h2>3 · Regras do corte</h2>
+   <label>Ritmo dos cortes</label>
+   <div class="pace" role="group" aria-label="Ritmo dos cortes">
+    <button data-p="fast"><b>Rápido</b><small>planos de ~6 s</small></button>
+    <button data-p="mid"><b>Médio</b><small>~14 s · padrão CP</small></button>
+    <button data-p="slow"><b>Lento</b><small>planos de ~25 s</small></button>
+   </div>
+   <div id="paceMsg" class="note" style="min-height:1.5em;margin-top:6px"></div>
+   <details><summary>Ajuste fino</summary>
+   <div class="two"><div><label>Início da conversa (mm:ss)</label><input id="tIn" value="0:00" inputmode="decimal"></div><div><label>Fim (mm:ss)</label><input id="tOut" value="" inputmode="decimal" placeholder="até o fim"></div></div>
+   <div class="two"><div><label>Plano mínimo (s)</label><input id="minShot" value="3" inputmode="decimal"></div><div><label>Confirmação da fala (s)</label><input id="hold" value="1" inputmode="decimal"></div></div>
+   <div class="two"><div><label>Sensibilidade (dB acima do ruído)</label><input id="thr" value="12" inputmode="decimal"></div><div><label>Respiro no aberto após (s, 0 = sem)</label><input id="maxShot" value="40" inputmode="decimal"></div></div>
+   <div class="note">Qualquer mudança refaz o corte na hora. "Desfazer" volta para o corte anterior.</div>
+   </details>
+   <label>Pasta do episódio no SSD</label><input id="base" value="G:/Action/CP_TP03_EP014">
+  </div>
+ </div>
+</div>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const HOP=0.1, FH=0.01, SYNC_SEC=600, COL={1:'#8a96a3',2:'#3d8bfd',3:'#f29f3a'};
+let tracks=[], dur=0, cuts=[], undo=[], zoom=1, playing=false, demo=true;
+const vids={1:$('v1'),2:$('v2'),3:$('v3')}, vnames={1:'C0001.MP4',2:'C0001.MP4',3:'C0001.MP4'}, vfiles={};
+const fmt=s=>{s=Math.max(0,s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=Math.floor(s%60);return [h,m,x].map(n=>String(n).padStart(2,'0')).join(':')};
+const parseT=v=>{if(!v.trim())return null;const p=v.split(':').map(Number);return p.length>1?p[0]*60+p[1]:p[0]};
+const msg=t=>{$('msg').textContent=t};
+const prog=f=>{$('prog').firstChild.style.width=(f*100)+'%'};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+const tick=()=>new Promise(r=>setTimeout(r,0));
+const sgn=x=>(x>=0?'+':'−')+Math.abs(x).toFixed(2).replace('.',',');
+
+// lembra configurações neste navegador
+const KEYS=['thr','base'];
+try{const s=JSON.parse(localStorage.getItem('cpmc')||'{}');KEYS.forEach(k=>{if(s[k]!=null)$(k).value=s[k]})}catch(e){}
+const saveCfg=()=>{try{const s={};KEYS.forEach(k=>s[k]=$(k).value);localStorage.setItem('cpmc',JSON.stringify(s))}catch(e){}};
+
+// ---------- envelope de volume (RMS em janelas) ----------
+class Env{constructor(sr,hop){this.wf=Math.max(1,Math.round(sr*hop));this.s=0;this.k=0;this.out=[]}
+  push(x){this.s+=x*x;if(++this.k>=this.wf){this.out.push(10*Math.log10(this.s/this.k+1e-12));this.s=0;this.k=0}}}
+
+// ---------- WAV lido por partes ----------
+async function wavHeader(file){
+  const b=await file.slice(0,1<<20).arrayBuffer(), d=new DataView(b);
+  const tag=o=>String.fromCharCode(d.getUint8(o),d.getUint8(o+1),d.getUint8(o+2),d.getUint8(o+3));
+  if(!['RIFF','RF64'].includes(tag(0))||tag(8)!=='WAVE')throw new Error(file.name+' não é WAV');
+  let o=12,h={},ds64=null;
+  while(o+8<=b.byteLength){
+    const id=tag(o),sz=d.getUint32(o+4,true);
+    if(id==='ds64')ds64=d.getUint32(o+16,true)+d.getUint32(o+20,true)*2**32;
+    if(id==='fmt '){let f=d.getUint16(o+8,true);h.ch=d.getUint16(o+10,true);h.sr=d.getUint32(o+12,true);h.bits=d.getUint16(o+22,true);if(f===0xFFFE)f=d.getUint16(o+32,true);h.float=f===3}
+    if(id==='data'){h.off=o+8;h.size=(sz===0xFFFFFFFF&&ds64)?ds64:sz;break}
+    o+=8+sz+(sz&1);
+  }
+  if(!h.off||!h.sr)throw new Error('Cabeçalho de '+file.name+' não reconhecido');
+  h.size=Math.min(h.size,file.size-h.off);h.fb=h.ch*h.bits/8;return h;
+}
+function pcmReader(u,dv,bps,flt,le){
+  if(bps===2)return p=>dv.getInt16(p,le)/32768;
+  if(bps===3)return le?p=>{let x=u[p]|u[p+1]<<8|u[p+2]<<16;if(x&0x800000)x|=~0xFFFFFF;return x/8388608}
+                      :p=>{let x=u[p]<<16|u[p+1]<<8|u[p+2];if(x&0x800000)x|=~0xFFFFFF;return x/8388608};
+  return flt?p=>dv.getFloat32(p,le):p=>dv.getInt32(p,le)/2147483648;
+}
+// envelope de um trecho do WAV [t0, t0+len) com janela hop
+async function wavEnv(file,h,t0,len,hop,onp,step=1){
+  const wf=Math.round(h.sr*hop), wb=wf*h.fb, n=Math.ceil(len/hop), out=new Float32Array(n).fill(-120);
+  const first=Math.round(t0/hop), per=Math.max(1,Math.floor((8<<20)/wb)), total=Math.floor(h.size/wb);
+  for(let w=Math.max(0,-first);w<n;w+=per){
+    const a=first+w; if(a>=total)break; const cnt=Math.min(per,n-w,total-a);
+    const u=new Uint8Array(await file.slice(h.off+a*wb,h.off+(a+cnt)*wb).arrayBuffer()), dv=new DataView(u.buffer), rd=pcmReader(u,dv,h.bits/8,h.float,true);
+    for(let k=0;k<cnt;k++){let s=0,c=0;for(let f=0;f<wf;f+=step){const p=k*wb+f*h.fb;let x=0;for(let q=0;q<h.ch;q++)x+=rd(p+q*h.bits/8);x/=h.ch;s+=x*x;c++}out[w+k]=10*Math.log10(s/c+1e-12)}
+    onp&&onp((w+cnt)/n);
+  }
+  return out;
+}
+async function wavLevels(file,onp){
+  const h=await wavHeader(file), len=h.size/h.fb/h.sr;
+  const lv=await wavEnv(file,h,0,Math.floor(len/HOP)*HOP,HOP,onp,4);
+  return {lv,ch:h.ch,kind:'wav',h};
+}
+// áudio comprimido: decodifica já reduzido para 3 kHz (basta para medir e sincronizar fala)
+async function decodeSmall(file){
+  const buf=await file.arrayBuffer(), AC=window.OfflineAudioContext||window.webkitOfflineAudioContext, ctx=new AC(1,1,3000);
+  const ab=await new Promise((ok,no)=>{const p=ctx.decodeAudioData(buf,ok,no);if(p&&p.catch)p.catch(no)});
+  const mono=new Float32Array(ab.length);
+  for(let c=0;c<ab.numberOfChannels;c++){const d=ab.getChannelData(c);for(let i=0;i<d.length;i++)mono[i]+=d[i]/ab.numberOfChannels}
+  return {mono,msr:ab.sampleRate,ch:ab.numberOfChannels};
+}
+function monoEnv(mono,msr,t0,len,hop){
+  const wf=Math.round(msr*hop), n=Math.ceil(len/hop), out=new Float32Array(n).fill(-120), first=Math.round(t0/hop);
+  for(let w=0;w<n;w++){const a=(first+w)*wf;if(a<0||a+wf>mono.length)continue;let s=0;for(let i=a;i<a+wf;i++)s+=mono[i]*mono[i];out[w]=10*Math.log10(s/wf+1e-12)}
+  return out;
+}
+async function compLevels(file,onp){
+  onp(.2);const d=await decodeSmall(file);onp(.9);
+  const lv=monoEnv(d.mono,d.msr,0,Math.floor(d.mono.length/d.msr/HOP)*HOP,HOP);onp(1);
+  return {lv,ch:d.ch,kind:'comp',mono:d.mono,msr:d.msr};
+}
+async function levels(file,onp){
+  if(/\.wav$/i.test(file.name)){try{return await wavLevels(file,onp)}catch(e){}}
+  try{return await compLevels(file,onp)}
+  catch(e){throw new Error('Não consegui ler '+file.name+(file.size>300e6?' (grande demais para o tablet; exporte em .m4a ou .mp3)':' (formato não suportado pelo navegador)'))}
+}
+// envelope fino (10 ms) de uma faixa de microfone, no tempo da própria faixa
+async function trackFine(t,t0,len){
+  if(t.kind==='wav')return wavEnv(t.file,t.h,t0,len,FH,null,2);
+  if(t.kind==='comp')return monoEnv(t.mono,t.msr,t0,len,FH);
+  return new Float32Array(Math.ceil(len/FH)).fill(-120);
+}
+
+// ---------- áudio de dentro do vídeo (MP4/MOV), sem carregar o vídeo inteiro ----------
+const rdv=async(f,o,l)=>new DataView(await f.slice(o,o+l).arrayBuffer());
+const S4=(d,o)=>String.fromCharCode(d.getUint8(o),d.getUint8(o+1),d.getUint8(o+2),d.getUint8(o+3));
+function* bx(d,s,e){let p=s;while(p+8<=e){let z=d.getUint32(p),t=S4(d,p+4),hd=8;if(z===1){z=d.getUint32(p+8)*2**32+d.getUint32(p+12);hd=16}else if(z===0)z=e-p;if(z<8)break;yield{t,s:p+hd,e:Math.min(e,p+z)};p+=z}}
+const child=(d,b,t)=>{for(const c of bx(d,b.s,b.e))if(c.t===t)return c;return null};
+function deep(d,s,e,t,n=0){for(const c of bx(d,s,e)){if(c.t===t)return c;if(n<3&&['wave','esds'].indexOf(c.t)===0){const r=deep(d,c.s,c.e,t,n+1);if(r)return r}}return null}
+function ascFrom(d,es){let p=es.s+4;const len=()=>{let l=0,b;do{b=d.getUint8(p++);l=l<<7|b&127}while(b&128);return l};
+  while(p<es.e){const tag=d.getUint8(p++),l=len();
+    if(tag===3){p+=2;const f=d.getUint8(p++);if(f&128)p+=2;if(f&64)p+=d.getUint8(p)+1;if(f&32)p+=2}
+    else if(tag===4)p+=13;
+    else if(tag===5)return new Uint8Array(d.buffer.slice(p,p+l));
+    else p+=l}
+  return null}
+async function videoEnv(file,maxSec,onp){
+  let pos=0,moov=null;
+  while(pos<file.size){const d=await rdv(file,pos,16);let z=d.getUint32(0);const t=S4(d,4);if(z===1)z=d.getUint32(8)*2**32+d.getUint32(12);else if(z===0)z=file.size-pos;if(z<8)break;if(t==='moov'){moov={pos,z};break}pos+=z}
+  if(!moov)throw new Error('formato de vídeo não reconhecido');
+  const d=await rdv(file,moov.pos,moov.z);let mdia=null,trak=null;
+  for(const tk of bx(d,8,d.byteLength)){if(tk.t!=='trak')continue;const m=child(d,tk,'mdia'),h=m&&child(d,m,'hdlr');if(h&&S4(d,h.s+8)==='soun'){mdia=m;trak=tk;break}}
+  if(!mdia)throw new Error('o vídeo não tem áudio');
+  const md=child(d,mdia,'mdhd'), ts=d.getUint32(md.s+(d.getUint8(md.s)===1?20:12));
+  let skip=0;const ed=child(d,trak,'edts'),el=ed&&child(d,ed,'elst');
+  if(el&&d.getUint32(el.s+4)>0){const v1=d.getUint8(el.s)===1,mt=v1?d.getUint32(el.s+16)*2**32+d.getUint32(el.s+20):d.getInt32(el.s+12);if(mt>0&&mt<ts*5)skip=mt/ts}
+  const stbl=child(d,child(d,mdia,'minf'),'stbl'), g=t=>child(d,stbl,t);
+  const sd=g('stsd'), e=sd.s+8, eEnd=e+d.getUint32(e), fmt=S4(d,e+4), ver=d.getUint16(e+16);
+  let ch=d.getUint16(e+24), bits=d.getUint16(e+26), sr=ts||d.getUint32(e+32)/65536, bpf=0, le=false, flt=false, kids=ver===1?e+52:e+36;
+  if(ver===2){sr=d.getFloat64(e+40);ch=d.getUint32(e+48);bits=d.getUint32(e+56);const fl=d.getUint32(e+60);bpf=d.getUint32(e+64);le=!(fl&2);flt=!!(fl&1);kids=e+72}
+  if(fmt==='sowt')le=true; if(fmt==='twos'||fmt==='in24'||fmt==='in32')le=false; if(fmt==='in24')bits=24; if(fmt==='in32')bits=32; if(fmt==='fl32'){bits=32;flt=true}
+  if(fmt==='ipcm'||fmt==='fpcm'){const pc=deep(d,kids,eEnd,'pcmC');if(pc){le=!!(d.getUint8(pc.s+4)&1);bits=d.getUint8(pc.s+5)}flt=fmt==='fpcm'}
+  if(!bpf)bpf=ch*bits/8;
+  const co=g('stco'),c64=g('co64'),nC=d.getUint32((co||c64).s+4);
+  const off=i=>co?d.getUint32(co.s+8+4*i):d.getUint32(c64.s+8+8*i)*2**32+d.getUint32(c64.s+12+8*i);
+  const sc=g('stsc'),nS=d.getUint32(sc.s+4),scE=[];for(let i=0;i<nS;i++)scE.push([d.getUint32(sc.s+8+12*i)-1,d.getUint32(sc.s+12+12*i)]);
+  const spc=i=>{let v=scE[0][1];for(const [f,s] of scE){if(f<=i)v=s;else break}return v};
+  const env=new Env(sr,FH), stop=maxSec*sr;let frames=0;
+  let cache={o:-1,l:0,u:null,dv:null};
+  const get=async(o,l)=>{if(o<cache.o||o+l>cache.o+cache.l){const L=Math.max(l,4<<20),u=new Uint8Array(await file.slice(o,o+L).arrayBuffer());cache={o,l:u.length,u,dv:new DataView(u.buffer)}}return o-cache.o};
+  const pcm=['lpcm','twos','sowt','in24','in32','fl32','ipcm','fpcm','raw ','NONE'].includes(fmt);
+  if(pcm){
+    const bps=bits/8;
+    for(let i=0;i<nC&&frames<stop;i++){const n=spc(i),p0=await get(off(i),n*bpf),rd=pcmReader(cache.u,cache.dv,bps,flt,le);
+      for(let f=0;f<n;f++){let x=0;for(let q=0;q<ch;q++)x+=rd(p0+f*bpf+q*bps);env.push(x/ch)}
+      frames+=n;if(i%200===0){onp&&onp(frames/stop);await tick()}}
+    return {env:Float32Array.from(env.out),sr,skip};
+  }
+  if(!/^mp4a/.test(fmt)||!window.AudioDecoder)throw new Error('áudio '+fmt.trim()+' não suportado');
+  const es=deep(d,kids,eEnd,'esds'),asc=es&&ascFrom(d,es);if(!asc)throw new Error('configuração AAC não encontrada');
+  const sz=g('stsz'),fix=d.getUint32(sz.s+4),size=k=>fix||d.getUint32(sz.s+12+4*k);
+  const dec=new AudioDecoder({output:a=>{const n=a.numberOfFrames,c=a.numberOfChannels,bufs=[];for(let q=0;q<c;q++){const b=new Float32Array(n);a.copyTo(b,{planeIndex:q,format:'f32-planar'});bufs.push(b)}
+      for(let f=0;f<n;f++){let x=0;for(let q=0;q<c;q++)x+=bufs[q][f];env.push(x/c)}a.close()},error:()=>{}});
+  dec.configure({codec:'mp4a.40.'+(asc[0]>>3),sampleRate:sr,numberOfChannels:ch,description:asc});
+  let k=0;
+  for(let i=0;i<nC&&frames<stop;i++){const n=spc(i);let o=off(i),tot=0;for(let j=0;j<n;j++)tot+=size(k+j);const p0=await get(o,tot);let p=p0;
+    for(let j=0;j<n;j++,k++){const s=size(k);dec.decode(new EncodedAudioChunk({type:'key',timestamp:Math.round(frames/sr*1e6),data:cache.u.subarray(p,p+s)}));p+=s;frames+=1024}
+    if(dec.decodeQueueSize>64)await new Promise(r=>setTimeout(r,5));if(i%100===0){onp&&onp(frames/stop);await tick()}}
+  await dec.flush();dec.close();
+  return {env:Float32Array.from(env.out),sr,skip};
+}
+async function camAudio(file,onp){
+  try{return await videoEnv(file,SYNC_SEC,onp)}
+  catch(err){if(file.size<400e6){const x=await decodeSmall(file);return {env:monoEnv(x.mono,x.msr,0,Math.min(SYNC_SEC,x.mono.length/x.msr),FH),skip:0}}throw err}
+}
+
+// ---------- correlação para achar o atraso ----------
+function z(a){const b=Float32Array.from(a,v=>Math.max(-60,Math.min(0,v)));let m=0;for(const v of b)m+=v;m/=b.length;let s=0;for(let i=0;i<b.length;i++){b[i]-=m;s+=b[i]*b[i]}s=Math.sqrt(s/b.length)||1;for(let i=0;i<b.length;i++)b[i]/=s;return b}
+// acha k tal que ref[k+i] ≈ x[i]; k pode ser negativo
+async function bestLag(ref,x,kMin,kMax){
+  const R=z(ref),X=z(x),sc=[];let best=-1e9,bk=0;
+  for(let k=kMin;k<=kMax;k++){const a=Math.max(0,-k),b=Math.min(X.length,R.length-k);let s=0;
+    if(b-a<X.length*.5){sc.push(-1e9);continue}for(let i=a;i<b;i++)s+=R[k+i]*X[i];s/=b-a;sc.push(s);if(s>best){best=s;bk=k}
+    if((k-kMin)%3000===0)await tick()}
+  let second=-1;sc.forEach((s,j)=>{if(Math.abs(kMin+j-bk)>20&&s>second)second=s});
+  return {k:bk,score:best,margin:best-second};
+}
+const powSum=arrs=>{const n=Math.max(...arrs.map(a=>a.length)),o=new Float32Array(n);for(let i=0;i<n;i++){let p=0;for(const a of arrs)if(i<a.length)p+=10**(a[i]/10);o[i]=10*Math.log10(p+1e-12)}return o};
+const ROLES={h:['Host',2],ch:['Co-Host',2],g1:['Convidado 1',3],g2:['Convidado 2',3],x:['Ignorar',0]};
+const lvAt=(t,i)=>{const k=i+Math.round(t.off/HOP);return k>=0&&k<t.lv.length?t.lv[k]:-120};
+const conf=r=>r.score>.3&&r.margin>.08?'alta':r.score>.15?'média':'baixa — confira';
+
+async function syncAll(){
+  if(demo||!tracks.length)return $('syncRes').textContent='Carregue os áudios do episódio primeiro.';
+  const out=[];$('sync').disabled=true;
+  try{
+    // 1) microfones entre si (faixa 1 é a referência)
+    const r0=tracks[0];
+    for(const t of tracks.slice(1)){
+      $('syncRes').textContent='Sincronizando '+t.name+'…';
+      const win=Math.min(SYNC_SEC,t.lv.length*HOP),x=t.lv.slice(0,Math.round(win/HOP));
+      const c=await bestLag(r0.lv,x,-Math.round(300/HOP),r0.lv.length-Math.round(win/2/HOP));
+      if(c.score<.15){out.push(`${t.name}: sem certeza, mantive ${sgn(t.off)} s`);continue}
+      const tc=-c.k*HOP,fa=await trackFine(r0,c.k*HOP-.5,win+1),fb=await trackFine(t,0,win);
+      const f=await bestLag(fa,fb,0,100);t.off=-(c.k*HOP+(f.k-50)*FH);
+      out.push(`${t.name}: ${sgn(t.off)} s (confiança ${conf(c)})`);
+    }
+    // 2) câmeras contra a mistura dos microfones
+    const mix=powSum(tracks.map(t=>Float32Array.from({length:r0.lv.length},(_,i)=>lvAt(t,i))));
+    for(const c of [1,2,3]){
+      if(!vfiles[c]){out.push(`Cam0${c}: sem vídeo carregado`);continue}
+      $('syncRes').textContent=`Lendo o áudio da Cam0${c}…`;
+      const ca=await camAudio(vfiles[c],p=>prog(p)),fine=ca.env;
+      const coarse=new Float32Array(Math.floor(fine.length/10));
+      for(let i=0;i<coarse.length;i++){let p=0;for(let j=0;j<10;j++)p+=10**(fine[i*10+j]/10);coarse[i]=10*Math.log10(p/10+1e-12)}
+      $('syncRes').textContent=`Comparando a Cam0${c} com os microfones…`;
+      const r=await bestLag(mix,coarse,-Math.round(300/HOP),mix.length-Math.round(coarse.length/2));
+      const t0=r.k*HOP-.5,len=fine.length*FH+1;
+      const ref=powSum(await Promise.all(tracks.map(t=>trackFine(t,t0+t.off,len))));
+      const f=await bestLag(ref,fine,0,100);
+      const o=-(r.k*HOP+(f.k-50)*FH)-ca.skip;$('o'+c).value=o.toFixed(2);
+      out.push(`Cam0${c}: ${sgn(o)} s (confiança ${conf(r)})`);
+    }
+    trackList();recut();syncVideo(true);
+    $('syncRes').innerHTML=out.map(esc).join('<br>');
+  }catch(e){$('syncRes').textContent='Erro na sincronização: '+e.message}
+  prog(1);$('sync').disabled=false;
+}
+$('sync').onclick=syncAll;
+
+// ---------- corte automático (mesma lógica do AutoPod) ----------
+const num=id=>{const v=parseFloat(String($(id).value).replace(',','.'));return isFinite(v)?v:0};
+let actCache=null;
+function getAct(thr){
+  const key=JSON.stringify([dur,tracks.map(t=>[t.name,t.role,t.cam,t.off])]);
+  if(!actCache||actCache.key!==key){
+    actCache={key,list:tracks.filter(t=>t.role!=='x'&&t.cam).map(t=>{
+      const s=[...t.lv].sort((a,b)=>a-b), floor=s[Math.floor(s.length*.15)], n=Math.round(dur/HOP), a=new Float32Array(n);
+      for(let i=0;i<n;i++){let m=0;for(let j=i-2;j<=i+2;j++)m+=lvAt(t,j);a[i]=m/5-floor}
+      return {a,cam:t.cam}})};
+  }
+  // câmera desejada em cada instante: 0 = ninguém falando
+  const act=actCache.list,n=Math.round(dur/HOP),want=new Uint8Array(n);
+  for(let i=0;i<n;i++){let b1=-1e9,r1='',b2=-1e9,r2='';
+    for(const t of act){const v=t.a[i];if(v<=thr)continue;if(v>b1){b2=b1;r2=r1;b1=v;r1=t.cam}else if(v>b2){b2=v;r2=t.cam}}
+    want[i]=b1<-1e8?0:(b2>-1e8&&r2!==r1&&b1-b2<4)?1:r1}
+  return want;
+}
+function cutWith(want,{minShot,hold,maxShot,t0,t1}){
+  const out=[{t:t0,cam:1}];let cur=1,shotStart=t0,pend=0,pendT=0,back=0;
+  for(let i=Math.floor(t0/HOP);i<Math.floor(t1/HOP);i++){
+    const t=i*HOP;
+    if(back&&t>=back.t){out.push({t,cam:back.cam});cur=back.cam;shotStart=t;back=0;continue}
+    const d=want[i]||cur;
+    if(d!==cur){
+      if(pend!==d){pend=d;pendT=t}
+      else if(t-pendT>=hold&&pendT-shotStart>=minShot){out.push({t:pendT,cam:d});cur=d;shotStart=pendT;pend=0}
+    }else pend=0;
+    if(maxShot>0&&!back&&cur!==1&&t-shotStart>maxShot){out.push({t,cam:1});back={t:t+4,cam:cur};cur=1;shotStart=t}
+  }
+  out.push({t:t1,cam:0});return out;
+}
+const median=c=>{const d=[];for(let i=0;i<c.length-1;i++)if(c[i].cam)d.push(c[i+1].t-c[i].t);d.sort((a,b)=>a-b);return d.length?d[Math.floor(d.length/2)]:0};
+const range=()=>{const t0=Math.max(0,parseT(String($('tIn').value).replace(',','.'))||0),te=parseT(String($('tOut').value).replace(',','.'));return {t0:Math.min(t0,dur),t1:Math.max(t0+1,Math.min(te==null||te<=0?dur:te,dur))}};
+function commit(nc,note){if(cuts.length)undo.push(JSON.stringify(cuts));cuts=nc;render();if(note)$('paceMsg').textContent=note}
+function autoCut(note){
+  if(!tracks.length)return;
+  const p={minShot:num('minShot'),hold:num('hold'),maxShot:num('maxShot'),...range()};
+  const nc=cutWith(getAct(num('thr')),p);
+  commit(nc,note===false?'':`Corte refeito: ${nc.length-1} planos, mediana ${median(nc).toFixed(1).replace('.',',')} s.`);
+}
+const PACES={fast:{target:6,minShot:1.5,maxShot:20},mid:{target:14,minShot:3,maxShot:40},slow:{target:25,minShot:6,maxShot:80}};
+let pace=null;const recut=()=>pace?setPace(pace):autoCut();
+function setPace(k){
+  if(!tracks.length)return;pace=k;const P=PACES[k],r=range(),want=getAct(num('thr'));
+  let lo=.2,hi=12,best=null;
+  for(let it=0;it<12;it++){const h=(lo+hi)/2,c=cutWith(want,{minShot:P.minShot,hold:h,maxShot:P.maxShot,...r}),m=median(c);
+    if(!best||Math.abs(m-P.target)<Math.abs(best.m-P.target))best={h,c,m};if(m<P.target)lo=h;else hi=h}
+  $('minShot').value=String(P.minShot).replace('.',',');$('maxShot').value=P.maxShot;$('hold').value=best.h.toFixed(2).replace('.',',');
+  document.querySelectorAll('.pace button').forEach(b=>b.classList.toggle('sel',b.dataset.p===k));
+  try{localStorage.setItem('cpmcPace',k)}catch(e){}
+  commit(best.c,`${({fast:'Rápido',mid:'Médio',slow:'Lento'})[k]}: ${best.c.length-1} planos, mediana ${best.m.toFixed(1).replace('.',',')} s`+(Math.abs(best.m-P.target)>P.target*.3?' (esta conversa não permite chegar mais perto do alvo).':'.'));
+}
+document.querySelectorAll('.pace button').forEach(b=>b.onclick=()=>setPace(b.dataset.p));
+let deb=0;
+['tIn','tOut','minShot','hold','thr','maxShot'].forEach(id=>{const f=()=>{clearTimeout(deb);deb=setTimeout(()=>{pace=null;document.querySelectorAll('.pace button').forEach(b=>b.classList.remove('sel'));saveCfg();autoCut()},500)};$(id).addEventListener('input',f);$(id).addEventListener('change',f)});
+
+// ---------- edição manual ----------
+function camAt(t){let c=1;for(const k of cuts){if(k.t<=t)c=k.cam||c;else break}return c}
+function setCam(c){
+  const t=now();undo.push(JSON.stringify(cuts));
+  cuts=cuts.filter(k=>Math.abs(k.t-t)>.05);cuts.push({t,cam:c});cuts.sort((a,b)=>a.t-b.t);
+  cuts=cuts.filter((k,i)=>i===0||k.cam===0||k.cam!==cuts[i-1].cam);render();
+}
+$('undo').onclick=()=>{if(undo.length){cuts=JSON.parse(undo.pop());render()}};
+document.querySelectorAll('.cam').forEach(b=>b.onclick=()=>setCam(+b.dataset.c));
+
+// ---------- reprodução com ganho por faixa ----------
+let actx=null,auds=[],vt=0;
+function buildAudio(){
+  auds.forEach(a=>{a.el.pause();URL.revokeObjectURL(a.el.src)});
+  auds=tracks.filter(t=>t.file).map(t=>({t,el:new Audio(URL.createObjectURL(t.file)),g:null}));
+}
+const db2lin=g=>10**(g/20);
+function applyGains(){auds.forEach(a=>{const v=a.t.mute?0:db2lin(a.t.gain);if(a.g)a.g.gain.value=v;else a.el.volume=Math.min(1,v)});layers()}
+function layers(){
+  $('layers').innerHTML=tracks.map((t,i)=>`<button class="ly${t.mute?' off':''}" data-m="${i}" aria-pressed="${!t.mute}"><i style="background:${t.role==='x'?COL[1]:COL[t.cam]||COL[1]}"></i>${t.mute?'🔇':'🔊'} ${esc(ROLES[t.role][0])}</button>`).join('')+(tracks.some(t=>t.mute)?'<button class="ly" id="allOn">Ouvir todas</button>':'');
+  $('layers').querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{const t=tracks[b.dataset.m];t.mute=!t.mute;applyGains();draw()});
+  const a=$('allOn');if(a)a.onclick=()=>{tracks.forEach(t=>t.mute=false);applyGains();draw()};
+}
+const now=()=>auds.length?auds[0].el.currentTime-auds[0].t.off:vt;
+function seek(t){t=Math.max(0,Math.min(dur,t));if(auds.length)auds.forEach(a=>a.el.currentTime=Math.max(0,t+a.t.off));else vt=t;syncVideo(true);render()}
+function syncVideo(force){
+  const t=now(),c=camAt(t),off=+$('o'+c).value||0;
+  for(const k in vids){const v=vids[k];const on=+k===c&&v.src;v.classList.toggle('on',!!on);
+    if(on){if(force||Math.abs(v.currentTime-(t+off))>.3)v.currentTime=Math.max(0,t+off);if(playing&&v.paused)v.play().catch(()=>{})}else if(!v.paused)v.pause()}
+  if(playing)auds.slice(1).forEach(a=>{const w=t+a.t.off;if(w>=0&&Math.abs(a.el.currentTime-w)>.12)a.el.currentTime=w});
+  $('slate').style.display=vids[c].src?'none':'grid';$('slate').textContent='CAM '+c;$('slate').style.background=COL[c];
+  $('tc').textContent=fmt(t);document.querySelectorAll('.cam').forEach(b=>b.classList.toggle('live',+b.dataset.c===c));
+}
+let last=0;
+function loop(ts){if(!playing)return;if(!auds.length){vt+=(ts-(last||ts))/1000;if(vt>=dur)playing=false}last=ts;syncVideo(false);drawHead();requestAnimationFrame(loop)}
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'❚❚ Pausar':'▶ Tocar';
+  if(playing){last=0;
+    try{if(!actx&&auds.length)actx=new (window.AudioContext||window.webkitAudioContext)();
+      auds.forEach(a=>{if(!a.g&&actx){const s=actx.createMediaElementSource(a.el);a.g=actx.createGain();s.connect(a.g).connect(actx.destination)}});
+      actx&&actx.resume()}catch(e){}
+    applyGains();const t=now();auds.forEach(a=>{a.el.currentTime=Math.max(0,t+a.t.off);a.el.play().catch(()=>msg('Toque de novo para liberar o áudio'))});requestAnimationFrame(loop)}
+  else{auds.forEach(a=>a.el.pause());Object.values(vids).forEach(v=>v.pause())}};
+$('back').onclick=()=>seek(now()-5);$('fwd').onclick=()=>seek(now()+5);
+
+// ---------- desenho ----------
+const cv=$('cv'),sc=$('sc');
+function draw(){
+  const W=Math.min(32000,sc.clientWidth*zoom),H=60+tracks.length*34,r=devicePixelRatio||1;
+  cv.width=W*r;cv.height=H*r;cv.style.width=W+'px';cv.style.height=H+'px';
+  const g=cv.getContext('2d');g.scale(r,r);g.clearRect(0,0,W,H);if(!dur)return;
+  const x=t=>t/dur*W, ink=getComputedStyle(document.body).color;
+  for(let i=0;i<cuts.length-1;i++){if(!cuts[i].cam)continue;g.fillStyle=COL[cuts[i].cam];g.fillRect(x(cuts[i].t),18,Math.max(1,x(cuts[i+1].t)-x(cuts[i].t)),30)}
+  g.fillStyle=ink;g.font='12px Inter,sans-serif';const step=[60,300,600,1200].find(s=>W/(dur/s)>70)||1800;
+  for(let t=0;t<dur;t+=step)g.fillText(fmt(t).slice(3),x(t)+3,12);
+  const N=Math.round(dur/HOP);
+  tracks.forEach((tr,j)=>{const y=60+j*34,n=Math.min(N,Math.floor(W)),gl=tr.gain||0;
+    g.fillStyle=ink;g.globalAlpha=tr.mute?.35:.7;g.fillText(ROLES[tr.role][0]+' · '+tr.name+(gl?` · ${gl>0?'+':''}${gl} dB`:'')+(tr.mute?' · mudo':''),4,y+10);
+    g.fillStyle=tr.role==='x'?COL[1]:COL[tr.cam]||COL[1];g.globalAlpha=tr.mute?.2:.85;
+    for(let p=0;p<n;p++){const a=Math.floor(p/n*N),b=Math.max(a+1,Math.floor((p+1)/n*N));let m=-120;for(let i=a;i<b;i++){const v=lvAt(tr,i);if(v>m)m=v}
+      const hgt=Math.max(0,Math.min(1,(m+gl+60)/60))*20;g.fillRect(p*W/n,y+32-hgt,Math.max(1,W/n),hgt)}g.globalAlpha=1});
+  drawHead();
+}
+function drawHead(){let h=$('head');
+  if(!h){h=document.createElement('div');h.id='head';h.style.cssText='position:absolute;top:0;width:2px;background:var(--tally);pointer-events:none';sc.style.position='relative';sc.appendChild(h)}
+  const W=parseFloat(cv.style.width)||0;h.style.left=(dur?now()/dur*W:0)+'px';h.style.height=cv.style.height}
+cv.onclick=e=>{const b=cv.getBoundingClientRect();seek((e.clientX-b.left)/b.width*dur)};
+document.querySelectorAll('[data-z]').forEach(b=>b.onclick=()=>{const t=now();zoom=+b.dataset.z;draw();sc.scrollLeft=t/dur*cv.clientWidth-sc.clientWidth/2});
+const ro=new ResizeObserver(()=>draw());ro.observe(sc);
+
+function stats(){
+  const sh=[];for(let i=0;i<cuts.length-1;i++)if(cuts[i].cam)sh.push({c:cuts[i].cam,d:cuts[i+1].t-cuts[i].t});
+  const tot=sh.reduce((s,x)=>s+x.d,0)||1,by={1:0,2:0,3:0};sh.forEach(x=>by[x.c]+=x.d);
+  const ds=sh.map(x=>x.d).sort((a,b)=>a-b);
+  $('nShots').textContent=sh.length;$('med').textContent=ds.length?ds[Math.floor(ds.length/2)].toFixed(1):'0';
+  $('share').innerHTML=[1,2,3].map(c=>`<span style="width:${by[c]/tot*100}%;background:${COL[c]}"></span>`).join('');
+  $('shareTxt').innerHTML=[[1,'Aberto'],[2,'Host'],[3,'Convidado']].map(([c,n])=>`<div class="row"><span>CAM ${c} · ${n}</span><b>${Math.round(by[c]/tot*100)}%</b></div>`).join('');
+}
+function render(){stats();draw();syncVideo(false)}
+
+// ---------- faixas: função, ganho e atraso ----------
+function trackList(){
+  $('trks').innerHTML=tracks.map((t,i)=>`<div class="trk"><span class="tn">${esc(t.name)}</span>
+    <button class="del" data-d="${i}" aria-label="Remover ${esc(t.name)}">Remover</button>
+    <div class="sel2"><label>Quem fala<select data-i="${i}">${Object.entries(ROLES).map(([k,[n]])=>`<option value="${k}">${n}</option>`).join('')}</select></label>
+    <label>Câmera<select data-c="${i}" ${t.role==='x'?'disabled':''}><option value="1">Cam01 · aberto</option><option value="2">Cam02</option><option value="3">Cam03</option></select></label></div>
+    <div class="gn"><span>Ganho</span><input type="range" min="-20" max="12" step="0.5" value="${t.gain}" data-g="${i}" aria-label="Ganho de ${esc(t.name)}"><output id="go${i}">${t.gain>0?'+':''}${t.gain} dB</output></div>
+    <label class="of">Atraso em relação à 1ª faixa (s)<input type="number" step="0.01" value="${t.off.toFixed(2)}" data-o="${i}" ${i?'':'disabled'}></label></div>`).join('');
+  $('trks').querySelectorAll('[data-i]').forEach(s=>{s.value=tracks[s.dataset.i].role;s.onchange=()=>{const t=tracks[s.dataset.i];t.role=s.value;if(ROLES[t.role][1])t.cam=ROLES[t.role][1];trackList();recut()}});
+  $('trks').querySelectorAll('[data-c]').forEach(s=>{s.value=tracks[s.dataset.c].cam;s.onchange=()=>{tracks[s.dataset.c].cam=+s.value;draw();recut()}});
+  $('trks').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>removeTrack(+b.dataset.d));
+  layers();
+  $('trks').querySelectorAll('[data-g]').forEach(r=>r.oninput=()=>{const t=tracks[r.dataset.g];t.gain=+r.value;$('go'+r.dataset.g).textContent=(t.gain>0?'+':'')+t.gain+' dB';applyGains();draw()});
+  $('trks').querySelectorAll('[data-o]').forEach(r=>r.onchange=()=>{tracks[r.dataset.o].off=parseFloat(String(r.value).replace(',','.'))||0;recut();seek(now())});
+}
+function removeTrack(i){
+  const t=tracks[i];if(!t)return;
+  if(i===0&&tracks.length>1){const o=tracks[1].off;tracks.forEach(x=>x.off-=o);[1,2,3].forEach(c=>{const f=$('o'+c);f.value=((parseFloat(String(f.value).replace(',','.'))||0)-o).toFixed(2)})}
+  tracks.splice(i,1);buildAudio();
+  if(!tracks.length){dur=0;cuts=[];undo=[];demo=true;$('trks').innerHTML='';layers();render();return msg('Faixa removida. Escolha os áudios de novo.')}
+  dur=tracks[0].lv.length*HOP;undo=[];cuts=[];trackList();recut();msg(t.name+' removido.');
+}
+const defRole=i=>['h','g1','g2','ch'][i]||'x';
+$('norm').onclick=()=>{tracks.forEach(t=>{const s=[...t.lv].sort((a,b)=>a-b),p=s[Math.floor(s.length*.95)];t.gain=Math.max(-20,Math.min(12,Math.round((-18-p)*2)/2))});trackList();applyGains();draw();msg('Volumes igualados pela fala mais forte de cada faixa.')};
+$('zero').onclick=()=>{tracks.forEach(t=>t.gain=0);trackList();applyGains();draw()};
+
+// ---------- entrada de arquivos ----------
+$('wavIn').onchange=async e=>{
+  msg('Recebi '+e.target.files.length+' arquivo(s)…');
+  const files=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name));if(!files.length)return;
+  if(files.some(f=>!/\.(wav|m4a|mp3|aac|flac|ogg|opus)$/i.test(f.name)))return msg('Formatos aceitos: WAV, M4A, MP3, AAC, FLAC, OGG, OPUS.');
+  const keep=demo?[]:tracks,nt=[];
+  try{
+    for(const [i,f] of files.entries()){msg('Analisando '+f.name+'…');const r=await levels(f,p=>prog((i+p)/files.length));
+      const role=defRole(keep.length+i);nt.push({name:f.name,file:f,role,cam:ROLES[role][1]||1,gain:0,off:0,mute:false,...r})}
+    tracks=keep.concat(nt);e.target.value='';demo=false;$('demoNote').textContent='';
+    dur=tracks[0].lv.length*HOP;buildAudio();
+    msg(`${tracks.length} faixa(s), ${fmt(dur)}. Confira quem fala em cada uma e toque em "Sincronizar automaticamente".`);
+    undo=[];cuts=[];trackList();setPace((()=>{try{return localStorage.getItem('cpmcPace')}catch(e){}})()||'mid');
+  }catch(err){msg('Erro: '+err.message)}
+};
+document.querySelectorAll('.vin').forEach(inp=>inp.onchange=()=>{const f=inp.files[0],c=inp.dataset.cam;if(!f)return;
+  vfiles[c]=f;if(vids[c].src)URL.revokeObjectURL(vids[c].src);vids[c].src=URL.createObjectURL(f);vnames[c]=f.name;$('fn'+c).textContent=f.name;
+  vids[c].onerror=()=>msg('O tablet não consegue exibir o vídeo da Cam0'+c+' (a sincronização ainda funciona). Para assistir, use uma cópia em 720p.');syncVideo(true)});
+['o1','o2','o3'].forEach(k=>$(k).onchange=()=>syncVideo(true));
+$('base').onchange=saveCfg;
+
+// ---------- XML (FCP7) que o Premiere importa como 05_Edicao_v1 ----------
+function xml(){
+  const fr=t=>Math.round(t*24000/1001), rate='<rate><timebase>24</timebase><ntsc>TRUE</ntsc></rate>';
+  const base=$('base').value.replace(/\\/g,'/').replace(/\/$/,'');
+  const url=p=>'file://localhost/'+encodeURI(p).replace(/#/g,'%23');
+  const t0=cuts[0].t, t1=cuts[cuts.length-1].t, seqDur=fr(t1-t0), seen={};
+  const fileTag=(id,name,path,dF,video,ch)=>{if(seen[id])return`<file id="${id}"/>`;seen[id]=1;
+    return`<file id="${id}"><name>${esc(name)}</name><pathurl>${esc(url(path))}</pathurl>${rate}<duration>${dF}</duration><media>${video?'<video><samplecharacteristics><width>3840</width><height>2160</height></samplecharacteristics></video>':''}<audio><samplecharacteristics><samplerate>48000</samplerate></samplecharacteristics><channelcount>${ch}</channelcount></audio></media></file>`};
+  const level=g=>`<filter><effect><name>Audio Levels</name><effectid>audiolevels</effectid><effectcategory>audiolevels</effectcategory><effecttype>audiolevels</effecttype><mediatype>audio</mediatype><parameter><parameterid>level</parameterid><name>Level</name><valuemin>0</valuemin><valuemax>3.98109</valuemax><value>${db2lin(g).toFixed(5)}</value></parameter></effect></filter>`;
+  let n=0;const vtr={1:'',2:'',3:''};
+  for(let i=0;i<cuts.length-1;i++){const k=cuts[i];if(!k.cam)continue;const c=k.cam,off=+$('o'+c).value||0;
+    const s=fr(k.t-t0),e=fr(cuts[i+1].t-t0),inF=Math.max(0,fr(k.t+off)),fd=fr(vids[c].duration||dur+600);
+    vtr[c]+=`<clipitem id="v${++n}"><name>${esc(vnames[c])}</name><enabled>TRUE</enabled><duration>${fd}</duration>${rate}<start>${s}</start><end>${e}</end><in>${inF}</in><out>${inF+e-s}</out>${fileTag('cam'+c,vnames[c],`${base}/02_bruto/01_videos/Cam0${c}/${vnames[c]}`,fd,true,2)}</clipitem>`}
+  const atr=tracks.map((t,j)=>{const fd=fr(t.lv.length*HOP),src=t0+t.off,st=src<0?fr(-src):0,inF=Math.max(0,fr(src));
+    return`<track><clipitem id="a${j+1}"><name>${esc(t.name)}</name><enabled>TRUE</enabled><duration>${fd}</duration>${rate}<start>${st}</start><end>${seqDur}</end><in>${inF}</in><out>${inF+seqDur-st}</out>${fileTag('aud'+j,t.name,`${base}/02_bruto/02_audios/${t.name}`,fd,false,t.ch)}<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack>${t.gain?level(t.gain):''}</clipitem></track>`}).join('');
+  return`<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="seq1"><name>05_Edicao_v1</name><duration>${seqDur}</duration>${rate}<media><video><format><samplecharacteristics>${rate}<width>3840</width><height>2160</height><pixelaspectratio>square</pixelaspectratio></samplecharacteristics></format>${[1,2,3].map(c=>`<track>${vtr[c]}</track>`).join('')}</video><audio>${atr}</audio></media></sequence></xmeml>`;
+}
+// No app Android: salva o XML com o plugin Filesystem e abre o menu de compartilhar (Drive, WhatsApp, e-mail...)
+const Cap=window.Capacitor, plug=n=>Cap&&(Cap.Plugins&&Cap.Plugins[n]||(Cap.registerPlugin&&Cap.registerPlugin(n)));
+const FS=plug('Filesystem'), SH=plug('Share');
+let dl=null;
+if(!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform())){try{window.claude&&window.claude.use('downloads').then(d=>{dl=d;if(!d)$('xml').hidden=true}).catch(()=>{$('xml').hidden=true})}catch(e){$('xml').hidden=true}}
+else $('xml').textContent='Salvar e enviar XML';
+$('xml').onclick=async()=>{if(demo)return msg('Carregue os áudios do episódio antes de exportar.');
+  const name='05_Edicao_v1_'+new Date().toISOString().slice(0,16).replace(/[-:T]/g,'')+'.xml',data=xml();
+  if(FS){
+    let r=null;
+    try{r=await FS.writeFile({path:'CP Multicam/'+name,data,directory:'DOCUMENTS',encoding:'utf8',recursive:true});msg('XML salvo em Documentos/CP Multicam/'+name)}
+    catch(e){r=await FS.writeFile({path:name,data,directory:'CACHE',encoding:'utf8'})}
+    try{await SH.share({title:name,text:'XML da edição multicâmera',url:r.uri,dialogTitle:'Enviar XML para…'})}catch(e){}
+    return;
+  }
+  if(!dl)return msg('Download indisponível aqui. Use "Copiar XML".');
+  try{await dl.save({filename:'05_Edicao_v1.xml',data});msg('XML salvo. No Premiere: Arquivo > Importar.')}catch(e){msg('Download cancelado. Use "Copiar XML".')}};
+$('copy').onclick=async()=>{if(demo)return msg('Carregue os áudios do episódio antes de exportar.');const x=xml(),o=$('out');o.hidden=false;o.value=x;
+  try{await navigator.clipboard.writeText(x);msg('XML copiado. Cole num arquivo .xml e importe no Premiere.')}catch(e){o.select();msg('Selecione o texto acima e copie.')}};
+
+// ---------- exemplo para abrir já em uso ----------
+(function(){dur=1200;const n=dur/HOP,h=new Float32Array(n),g=new Float32Array(n);let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  let i=0,who=0;while(i<n){const len=Math.floor((who?250:120)+rnd()*(who?600:300)),cross=rnd()<.2;
+    for(let k=i;k<Math.min(n,i+len);k++){const a=-24+rnd()*6,b=-50+rnd()*4;
+      if(cross&&k-i<60){h[k]=a;g[k]=a-1}else{(who?g:h)[k]=rnd()<.88?a:-56;(who?h:g)[k]=b}}
+    i+=len;who=1-who}
+  tracks=[{name:'Tr1.WAV',role:'h',cam:2,gain:0,off:0,mute:false,lv:h,ch:1},{name:'Tr2.WAV',role:'g1',cam:3,gain:0,off:0,mute:false,lv:g,ch:1}];trackList();setPace('mid');undo=[];$('paceMsg').textContent=''})();
+}
+
+</script>
+</body>
+</html>

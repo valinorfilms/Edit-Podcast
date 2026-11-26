@@ -102,7 +102,7 @@ details{margin-top:10px;border-top:1px solid var(--line);padding-top:6px}summary
    <div><div class="big" id="nShots">0</div><div class="note">planos · mediana <b id="med">0</b> s</div></div>
    <div class="bar" id="share"></div>
    <div id="shareTxt"></div>
-   <div class="note">Referência do CP: convidado 50–55%, aberto e host 22–25% cada, mediana 13–15 s.</div>
+   <div class="note">A câmera segue quem está falando. Quando duas pessoas falam juntas, vai para o plano aberto (Cam01).</div>
    <div class="ctrl"><button class="pri" id="xml">Baixar XML p/ Premiere</button><button id="share" hidden>Enviar para…</button><button id="copy">Copiar XML</button></div>
    <textarea id="out" hidden readonly></textarea>
   </div>
@@ -136,17 +136,17 @@ details{margin-top:10px;border-top:1px solid var(--line);padding-top:6px}summary
   </div>
   <div class="card">
    <h2>3 · Regras do corte</h2>
-   <label>Ritmo dos cortes</label>
+   <label>Reação dos cortes à fala</label>
    <div class="pace" role="group" aria-label="Ritmo dos cortes">
-    <button data-p="fast"><b>Rápido</b><small>planos de ~6 s</small></button>
-    <button data-p="mid"><b>Médio</b><small>~14 s · padrão CP</small></button>
-    <button data-p="slow"><b>Lento</b><small>planos de ~25 s</small></button>
+    <button data-p="fast"><b>Rápido</b><small>corta em falas de 0,4 s</small></button>
+    <button data-p="mid"><b>Médio</b><small>falas a partir de 1 s</small></button>
+    <button data-p="slow"><b>Lento</b><small>ignora falas curtas</small></button>
    </div>
    <div id="paceMsg" class="note" style="min-height:1.5em;margin-top:6px"></div>
    <details><summary>Ajuste fino</summary>
    <div class="two"><div><label>Início da conversa (mm:ss)</label><input id="tIn" value="0:00" inputmode="decimal"></div><div><label>Fim (mm:ss)</label><input id="tOut" value="" inputmode="decimal" placeholder="até o fim"></div></div>
-   <div class="two"><div><label>Plano mínimo (s)</label><input id="minShot" value="3" inputmode="decimal"></div><div><label>Confirmação da fala (s)</label><input id="hold" value="1" inputmode="decimal"></div></div>
-   <div class="two"><div><label>Sensibilidade (dB acima do ruído)</label><input id="thr" value="12" inputmode="decimal"></div><div><label>Respiro no aberto após (s, 0 = sem)</label><input id="maxShot" value="40" inputmode="decimal"></div></div>
+   <div class="two"><div><label>Plano mínimo (s)</label><input id="minShot" value="1,5" inputmode="decimal"></div><div><label>Confirmação da fala (s)</label><input id="hold" value="1" inputmode="decimal"></div></div>
+   <div class="two"><div><label>Sensibilidade (dB acima do ruído)</label><input id="thr" value="12" inputmode="decimal"></div><div><label>Respiro no aberto após (s, 0 = desligado)</label><input id="maxShot" value="0" inputmode="decimal"></div></div>
    <div class="note">Qualquer mudança refaz o corte na hora. "Desfazer" volta para o corte anterior.</div>
    </details>
    <label>Pasta do episódio no SSD</label><input id="base" value="G:/Action/CP_TP03_EP014">
@@ -381,15 +381,22 @@ function getAct(thr){
     want[i]=b1<-1e8?0:(b2>-1e8&&r2!==r1&&b1-b2<4)?1:r1}
   return want;
 }
+// Corte guiado pelo áudio: a câmera vai para quem está falando.
+// hold = quanto tempo a fala precisa durar para virar corte; minShot = menor plano permitido.
 function cutWith(want,{minShot,hold,maxShot,t0,t1}){
-  const out=[{t:t0,cam:1}];let cur=1,shotStart=t0,pend=0,pendT=0,back=0;
-  for(let i=Math.floor(t0/HOP);i<Math.floor(t1/HOP);i++){
+  const i0=Math.floor(t0/HOP),i1=Math.floor(t1/HOP);
+  let first=1;for(let i=i0;i<i1;i++)if(want[i]){first=want[i];break}
+  const out=[{t:t0,cam:first}];let cur=first,shotStart=t0,pend=0,pendT=0,back=0;
+  for(let i=i0;i<i1;i++){
     const t=i*HOP;
     if(back&&t>=back.t){out.push({t,cam:back.cam});cur=back.cam;shotStart=t;back=0;continue}
-    const d=want[i]||cur;
+    const d=want[i]||cur;                       // silêncio: fica em quem falou por último
     if(d!==cur){
       if(pend!==d){pend=d;pendT=t}
-      else if(t-pendT>=hold&&pendT-shotStart>=minShot){out.push({t:pendT,cam:d});cur=d;shotStart=pendT;pend=0}
+      else if(t-pendT>=hold){                   // fala confirmada: corta no começo dela (um pouco antes)
+        const ct=Math.max(pendT-HOP,shotStart+minShot);
+        if(ct<=t){out.push({t:ct,cam:d});cur=d;shotStart=ct;pend=0}
+      }
     }else pend=0;
     if(maxShot>0&&!back&&cur!==1&&t-shotStart>maxShot){out.push({t,cam:1});back={t:t+4,cam:cur};cur=1;shotStart=t}
   }
@@ -404,17 +411,16 @@ function autoCut(note){
   const nc=cutWith(getAct(num('thr')),p);
   commit(nc,note===false?'':`Corte refeito: ${nc.length-1} planos, mediana ${median(nc).toFixed(1).replace('.',',')} s.`);
 }
-const PACES={fast:{target:6,minShot:1.5,maxShot:20},mid:{target:14,minShot:3,maxShot:40},slow:{target:25,minShot:6,maxShot:80}};
+// Reação: com que rapidez a câmera troca quando outra pessoa começa a falar
+const PACES={fast:{hold:.4,minShot:.8},mid:{hold:1,minShot:1.5},slow:{hold:2.5,minShot:3}};
 let pace=null;const recut=()=>pace?setPace(pace):autoCut();
 function setPace(k){
   if(!tracks.length)return;pace=k;const P=PACES[k],r=range(),want=getAct(num('thr'));
-  let lo=.2,hi=12,best=null;
-  for(let it=0;it<12;it++){const h=(lo+hi)/2,c=cutWith(want,{minShot:P.minShot,hold:h,maxShot:P.maxShot,...r}),m=median(c);
-    if(!best||Math.abs(m-P.target)<Math.abs(best.m-P.target))best={h,c,m};if(m<P.target)lo=h;else hi=h}
-  $('minShot').value=String(P.minShot).replace('.',',');$('maxShot').value=P.maxShot;$('hold').value=best.h.toFixed(2).replace('.',',');
+  const c=cutWith(want,{minShot:P.minShot,hold:P.hold,maxShot:0,...r});
+  $('minShot').value=String(P.minShot).replace('.',',');$('hold').value=String(P.hold).replace('.',',');$('maxShot').value=0;
   document.querySelectorAll('.pace button').forEach(b=>b.classList.toggle('sel',b.dataset.p===k));
   try{localStorage.setItem('cpmcPace',k)}catch(e){}
-  commit(best.c,`${({fast:'Rápido',mid:'Médio',slow:'Lento'})[k]}: ${best.c.length-1} planos, mediana ${best.m.toFixed(1).replace('.',',')} s`+(Math.abs(best.m-P.target)>P.target*.3?' (esta conversa não permite chegar mais perto do alvo).':'.'));
+  commit(c,`${({fast:'Rápido',mid:'Médio',slow:'Lento'})[k]}: ${c.length-1} planos, mediana ${median(c).toFixed(1).replace('.',',')} s.`);
 }
 document.querySelectorAll('.pace button').forEach(b=>b.onclick=()=>setPace(b.dataset.p));
 let deb=0;

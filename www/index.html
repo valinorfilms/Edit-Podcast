@@ -102,7 +102,7 @@ details{margin-top:10px;border-top:1px solid var(--line);padding-top:6px}summary
    <div><div class="big" id="nShots">0</div><div class="note">planos · mediana <b id="med">0</b> s</div></div>
    <div class="bar" id="share"></div>
    <div id="shareTxt"></div>
-   <div class="note">A câmera segue quem está falando. Quando duas pessoas falam juntas, vai para o plano aberto (Cam01).</div>
+   <div class="note">A câmera segue quem está falando. Quando duas pessoas falam juntas, ou alguém fala por muito tempo, entra o plano aberto (Cam01).</div>
    <div class="ctrl"><button class="pri" id="xml">Baixar XML p/ Premiere</button><button id="share" hidden>Enviar para…</button><button id="copy">Copiar XML</button></div>
    <textarea id="out" hidden readonly></textarea>
   </div>
@@ -142,11 +142,18 @@ details{margin-top:10px;border-top:1px solid var(--line);padding-top:6px}summary
     <button data-p="mid"><b>Médio</b><small>falas a partir de 1 s</small></button>
     <button data-p="slow"><b>Lento</b><small>ignora falas curtas</small></button>
    </div>
+   <label>Dinamismo: plano aberto quando alguém fica muito tempo na tela</label>
+   <div class="pace dyn" role="group" aria-label="Dinamismo" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <button data-v="0"><b>Sem</b><small>só a fala</small></button>
+    <button data-v="40"><b>Leve</b><small>após 40 s</small></button>
+    <button data-v="25"><b>Médio</b><small>após 25 s</small></button>
+    <button data-v="15"><b>Alto</b><small>após 15 s</small></button>
+   </div>
    <div id="paceMsg" class="note" style="min-height:1.5em;margin-top:6px"></div>
    <details><summary>Ajuste fino</summary>
    <div class="two"><div><label>Início da conversa (mm:ss)</label><input id="tIn" value="0:00" inputmode="decimal"></div><div><label>Fim (mm:ss)</label><input id="tOut" value="" inputmode="decimal" placeholder="até o fim"></div></div>
    <div class="two"><div><label>Plano mínimo (s)</label><input id="minShot" value="1,5" inputmode="decimal"></div><div><label>Confirmação da fala (s)</label><input id="hold" value="1" inputmode="decimal"></div></div>
-   <div class="two"><div><label>Sensibilidade (dB acima do ruído)</label><input id="thr" value="12" inputmode="decimal"></div><div><label>Respiro no aberto após (s, 0 = desligado)</label><input id="maxShot" value="0" inputmode="decimal"></div></div>
+   <div class="two"><div><label>Sensibilidade (dB acima do ruído)</label><input id="thr" value="12" inputmode="decimal"></div><div><label>Plano aberto após (s, 0 = desligado)</label><input id="maxShot" value="25" inputmode="decimal"></div></div>
    <div class="note">Qualquer mudança refaz o corte na hora. "Desfazer" volta para o corte anterior.</div>
    </details>
    <label>Pasta do episódio no SSD</label><input id="base" value="G:/Action/CP_TP03_EP014">
@@ -383,23 +390,41 @@ function getAct(thr){
 }
 // Corte guiado pelo áudio: a câmera vai para quem está falando.
 // hold = quanto tempo a fala precisa durar para virar corte; minShot = menor plano permitido.
+// maxShot = dinamismo: se a mesma pessoa ficar mais que isso na tela, entra o plano aberto (Cam01)
+// numa pausa natural da fala e volta para ela na pausa seguinte.
 function cutWith(want,{minShot,hold,maxShot,t0,t1}){
   const i0=Math.floor(t0/HOP),i1=Math.floor(t1/HOP);
   let first=1;for(let i=i0;i<i1;i++)if(want[i]){first=want[i];break}
-  const out=[{t:t0,cam:first}];let cur=first,shotStart=t0,pend=0,pendT=0,back=0;
+  const out=[{t:t0,cam:first}];let cur=first,shotStart=t0,pend=0,pendT=0,back=null,nb=0;
+  const cut=(t,c)=>{out.push({t,cam:c});cur=c;shotStart=t;pend=0};
+  // olha à frente: se outra pessoa fala nos próximos 6 s, a troca já dá o dinamismo
+  const changeSoon=i=>{if(i1-i<60)return true;for(let j=i+1;j<Math.min(i1,i+60);j++)if(want[j]&&want[j]!==1&&want[j]!==cur)return true;return false};
   for(let i=i0;i<i1;i++){
-    const t=i*HOP;
-    if(back&&t>=back.t){out.push({t,cam:back.cam});cur=back.cam;shotStart=t;back=0;continue}
-    const d=want[i]||cur;                       // silêncio: fica em quem falou por último
+    const t=i*HOP, w=want[i], d=w||cur;
+    // durante a variação no aberto: volta para quem fala numa pausa (ou no máximo em back.max)
+    if(back){
+      if(w&&w!==1&&w!==back.cam){back=null}           // outra pessoa começou: segue a regra normal
+      else{
+        // volta quando a pessoa retoma a fala depois de uma pausa, ou à força em back.max
+        if(w===0)back.paused=true;
+        if(t>=back.min&&w===back.cam&&(back.paused||t>=back.max)){const c=back.cam;back=null;cut(Math.max(shotStart+minShot,t-HOP),c)}
+        continue}
+    }
     if(d!==cur){
       if(pend!==d){pend=d;pendT=t}
-      else if(t-pendT>=hold){                   // fala confirmada: corta no começo dela (um pouco antes)
+      else if(t-pendT>=hold){                         // fala confirmada: corta no começo dela (um pouco antes)
         const ct=Math.max(pendT-HOP,shotStart+minShot);
-        if(ct<=t){out.push({t:ct,cam:d});cur=d;shotStart=ct;pend=0}
+        if(ct<=t)cut(ct,d);
       }
     }else pend=0;
-    if(maxShot>0&&!back&&cur!==1&&t-shotStart>maxShot){out.push({t,cam:1});back={t:t+4,cam:cur};cur=1;shotStart=t}
+    // dinamismo: plano longo na mesma pessoa → aberto na próxima pausa (ou forçado 8 s depois)
+    if(maxShot>0&&cur!==1&&t-shotStart>maxShot&&(w===0||t-shotStart>maxShot+8)&&!changeSoon(i)){
+      const dur=3+(nb++%3);                           // varia 3, 4, 5 s para não ficar mecânico
+      back={cam:cur,min:t+dur,max:t+dur+3};cut(t,1);
+    }
   }
+  // limpa planos minúsculos no fim
+  while(out.length>1&&t1-out[out.length-1].t<.5)out.pop();
   out.push({t:t1,cam:0});return out;
 }
 const median=c=>{const d=[];for(let i=0;i<c.length-1;i++)if(c[i].cam)d.push(c[i+1].t-c[i].t);d.sort((a,b)=>a-b);return d.length?d[Math.floor(d.length/2)]:0};
@@ -416,15 +441,19 @@ const PACES={fast:{hold:.4,minShot:.8},mid:{hold:1,minShot:1.5},slow:{hold:2.5,m
 let pace=null;const recut=()=>pace?setPace(pace):autoCut();
 function setPace(k){
   if(!tracks.length)return;pace=k;const P=PACES[k],r=range(),want=getAct(num('thr'));
-  const c=cutWith(want,{minShot:P.minShot,hold:P.hold,maxShot:0,...r});
-  $('minShot').value=String(P.minShot).replace('.',',');$('hold').value=String(P.hold).replace('.',',');$('maxShot').value=0;
-  document.querySelectorAll('.pace button').forEach(b=>b.classList.toggle('sel',b.dataset.p===k));
+  const c=cutWith(want,{minShot:P.minShot,hold:P.hold,maxShot:num('maxShot'),...r});
+  $('minShot').value=String(P.minShot).replace('.',',');$('hold').value=String(P.hold).replace('.',',');
+  document.querySelectorAll('.pace button[data-p]').forEach(b=>b.classList.toggle('sel',b.dataset.p===k));
   try{localStorage.setItem('cpmcPace',k)}catch(e){}
   commit(c,`${({fast:'Rápido',mid:'Médio',slow:'Lento'})[k]}: ${c.length-1} planos, mediana ${median(c).toFixed(1).replace('.',',')} s.`);
 }
-document.querySelectorAll('.pace button').forEach(b=>b.onclick=()=>setPace(b.dataset.p));
+document.querySelectorAll('.pace button[data-p]').forEach(b=>b.onclick=()=>setPace(b.dataset.p));
+function setDyn(v,silent){$('maxShot').value=v;document.querySelectorAll('.dyn button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===+v));
+  try{localStorage.setItem('cpmcDyn',v)}catch(e){};if(!silent)recut()}
+document.querySelectorAll('.dyn button').forEach(b=>b.onclick=()=>setDyn(b.dataset.v));
+try{const v=localStorage.getItem('cpmcDyn');setDyn(v==null?25:v,true)}catch(e){setDyn(25,true)}
 let deb=0;
-['tIn','tOut','minShot','hold','thr','maxShot'].forEach(id=>{const f=()=>{clearTimeout(deb);deb=setTimeout(()=>{pace=null;document.querySelectorAll('.pace button').forEach(b=>b.classList.remove('sel'));saveCfg();autoCut()},500)};$(id).addEventListener('input',f);$(id).addEventListener('change',f)});
+['tIn','tOut','minShot','hold','thr','maxShot'].forEach(id=>{const f=()=>{clearTimeout(deb);deb=setTimeout(()=>{pace=null;document.querySelectorAll('.dyn button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===num('maxShot')));document.querySelectorAll('.pace button[data-p]').forEach(b=>b.classList.remove('sel'));saveCfg();autoCut()},500)};$(id).addEventListener('input',f);$(id).addEventListener('change',f)});
 
 // ---------- edição manual ----------
 function camAt(t){let c=1;for(const k of cuts){if(k.t<=t)c=k.cam||c;else break}return c}
